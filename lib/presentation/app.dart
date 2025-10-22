@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'page_state/home/home_bloc.dart';
 import 'resources/theme.dart';
 import 'routes/router.dart';
 
@@ -8,14 +10,20 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: FocusManager.instance.primaryFocus?.unfocus,
-      child: MaterialApp.router(
-        title: 'Timedoor Test',
-        routerConfig: router,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.light,
+    return BlocProvider(
+      create: (context) => HomeBloc(),
+      child: GestureDetector(
+        onTap: FocusManager.instance.primaryFocus?.unfocus,
+        child: BlocBuilder<HomeBloc, HomeState>(
+          buildWhen: (p, c) => p.themeMode != c.themeMode,
+          builder: (context, state) => MaterialApp.router(
+            title: 'Timedoor Test',
+            routerConfig: router,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: state.themeMode,
+          ),
+        ),
       ),
     );
   }

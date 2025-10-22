@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/material_symbols_icons.dart';
 
+import '../../page_state/home/home_bloc.dart';
 import '../../widgets/confirmation_book_dialog.dart';
 import '../../widgets/dotted_seperator.dart';
 import '../../widgets/dynamic_container.dart';
@@ -10,6 +13,9 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final df = DateFormat('dd/MM/yyyy');
+    final nf = NumberFormat();
+
     return Scaffold(
       body: SingleChildScrollView(
         padding: MediaQuery.viewPaddingOf(context),
@@ -38,20 +44,46 @@ class HomePage extends StatelessWidget {
                     child: Column(
                       spacing: 16.0,
                       children: [
-                        const Column(
+                        Column(
                           spacing: 4.0,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Padding(
+                            const Padding(
                               padding: EdgeInsets.only(left: 8.0),
                               child: Text('Departure Date'),
                             ),
                             TextField(
+                              controller: context
+                                  .read<HomeBloc>()
+                                  .departDateController,
                               readOnly: true,
-                              decoration: InputDecoration(
+                              decoration: const InputDecoration(
                                 hintText: 'dd/mm/yyyy',
                               ),
+                              onTap: () async {
+                                final now = DateTime.now();
+                                final date = await showDatePicker(
+                                  context: context,
+                                  firstDate: now,
+                                  lastDate: now.add(
+                                    const Duration(days: 30 * 3),
+                                  ),
+                                  currentDate: switch (context
+                                      .read<HomeBloc>()
+                                      .departDateController
+                                      .text) {
+                                    '' => null,
+                                    final currDate => df.parse(currDate),
+                                  },
+                                );
+
+                                if (date != null && context.mounted) {
+                                  context.read<HomeBloc>().add(
+                                    SetDepartureDate(df.format(date)),
+                                  );
+                                }
+                              },
                             ),
                           ],
                         ),
@@ -64,21 +96,28 @@ class HomePage extends StatelessWidget {
                               padding: EdgeInsets.only(left: 8.0),
                               child: Text('Class Type'),
                             ),
-                            RadioGroup<int>(
-                              onChanged: (value) {},
-                              child: Row(
-                                children:
-                                    {1: 'Regular Class', 2: 'Express Class'}
-                                        .entries
-                                        .map(
-                                          (e) => _HorizontalRadioItem(
-                                            value: e.key,
-                                            label: e.value,
-                                            onTap: () {},
-                                          ),
-                                        )
-                                        .toList(),
-                              ),
+                            BlocBuilder<HomeBloc, HomeState>(
+                              buildWhen: (p, c) => p.classType != c.classType,
+                              builder: (context, state) =>
+                                  RadioGroup<ClassType>(
+                                    groupValue: state.classType,
+                                    onChanged: (value) => context
+                                        .read<HomeBloc>()
+                                        .add(SelectClassType(value!)),
+                                    child: Row(
+                                      children: ClassType.values
+                                          .map(
+                                            (e) => _HorizontalRadioItem(
+                                              value: e,
+                                              label: e.label,
+                                              onTap: () => context
+                                                  .read<HomeBloc>()
+                                                  .add(SelectClassType(e)),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
                             ),
                           ],
                         ),
@@ -86,63 +125,112 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 32.0),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                  child: DottedSeparator(
-                    height: 1.5,
-                    color: Theme.of(context).dividerColor,
-                    // color: ColorScheme.of(
-                    //   context,
-                    // ).inverseSurface.withAlpha(255 * 1 ~/ 3),
-                  ),
-                ),
-                const SizedBox(height: 32.0),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: DynamicContainer(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      spacing: 8.0,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                BlocBuilder<HomeBloc, HomeState>(
+                  buildWhen: (p, c) =>
+                      p.classType == null || c.classType == null,
+                  builder: (context, state) {
+                    if (state.classType == null) return const SizedBox.shrink();
+                    return Column(
                       children: [
-                        SizedBox.square(
-                          dimension: 40.0,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Theme.of(context).dividerColor,
-                              ),
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(8.0),
-                              ),
-                            ),
-                            child: const Icon(Symbols.search_hands_free),
+                        const SizedBox(height: 32.0),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                          child: DottedSeparator(
+                            height: 1.5,
+                            color: Theme.of(context).dividerColor,
+                            // color: ColorScheme.of(
+                            //   context,
+                            // ).inverseSurface.withAlpha(255 * 1 ~/ 3),
                           ),
                         ),
-                        _GridSeat(
-                          corridorWidth: 40.0,
-                          spacing: 8.0,
-                          colCount: 4,
-                          rowCount: 3,
-                          seatWidth: 40.0,
-                          seatHeight: 80.0,
-                          disabledSeat: {1, 4, 8, 13},
-                          selectedIndex: 5,
-                          onSelected: (value) {},
+                        const SizedBox(height: 32.0),
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: DynamicContainer(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Column(
+                              spacing: 8.0,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                SizedBox.square(
+                                  dimension: 40.0,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Theme.of(context).dividerColor,
+                                      ),
+                                      borderRadius: const BorderRadius.all(
+                                        Radius.circular(8.0),
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Symbols.search_hands_free,
+                                    ),
+                                  ),
+                                ),
+                                BlocBuilder<HomeBloc, HomeState>(
+                                  buildWhen: (p, c) =>
+                                      p.classType != c.classType ||
+                                      p.bookedSeat != c.bookedSeat ||
+                                      p.selectedSeat != c.selectedSeat ||
+                                      p.isLoading != c.isLoading,
+                                  builder: (context, state) => _GridSeat(
+                                    corridorWidth: 40.0,
+                                    spacing: 8.0,
+                                    colCount: 4,
+                                    rowCount: switch (state.classType!) {
+                                      ClassType.regular => 5,
+                                      ClassType.express => 3,
+                                    },
+                                    seatWidth: 40.0,
+                                    seatHeight: switch (state.classType!) {
+                                      ClassType.regular => 40.0,
+                                      ClassType.express => 80.0,
+                                    },
+                                    disabledSeat:
+                                        state.bookedSeat[context
+                                            .read<HomeBloc>()
+                                            .departDateController
+                                            .text]?[state.classType!] ??
+                                        const {},
+                                    selectedSeat: state.selectedSeat,
+                                    onSelected: (value) => context
+                                        .read<HomeBloc>()
+                                        .add(SelectSeat(value)),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12.0),
+                                  child: BlocBuilder<HomeBloc, HomeState>(
+                                    buildWhen: (p, c) =>
+                                        p.totalPrice != c.totalPrice,
+                                    builder: (context, state) => Text(
+                                      'Total Price: Rp ${nf.format(state.totalPrice)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12.0),
-                          child: Text(
-                            'Total Price: Rp 170.000',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                        BlocBuilder<HomeBloc, HomeState>(
+                          buildWhen: (p, c) =>
+                              p.selectedSeat.isEmpty || c.selectedSeat.isEmpty,
+                          builder: (context, state) => SizedBox(
+                            height:
+                                24.0 +
+                                (state.selectedSeat.isEmpty
+                                    ? 0.0
+                                    : kMinInteractiveDimension),
                           ),
                         ),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
-                const SizedBox(height: kMinInteractiveDimension + 16.0),
               ],
             ),
             Positioned(
@@ -150,14 +238,17 @@ class HomePage extends StatelessWidget {
               right: 8.0,
               child: PopupMenuButton<int>(
                 onSelected: (value) => switch (value) {
-                  0 => null,
+                  0 => context.read<HomeBloc>().add(const ToggleTheme()),
+                  1 => context.read<HomeBloc>().add(const ResetForm()),
                   _ => null,
                 },
-                itemBuilder: (context) => {0: 'Reset All Seat'}.entries
-                    .map(
-                      (e) => PopupMenuItem(value: e.key, child: Text(e.value)),
-                    )
-                    .toList(),
+                itemBuilder: (context) =>
+                    {0: 'Toggle Theme', 1: 'Reset All Seat'}.entries
+                        .map(
+                          (e) =>
+                              PopupMenuItem(value: e.key, child: Text(e.value)),
+                        )
+                        .toList(),
                 icon: const Icon(Icons.menu_open),
                 position: PopupMenuPosition.under,
                 constraints: BoxConstraints(
@@ -171,20 +262,51 @@ class HomePage extends StatelessWidget {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: SizedBox(
-        width: double.infinity,
-        height: kMinInteractiveDimension,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: ColorScheme.of(context).primary,
-              foregroundColor: ColorScheme.of(context).onPrimary,
+      floatingActionButton: BlocConsumer<HomeBloc, HomeState>(
+        listenWhen: (p, c) => p.isLoading != c.isLoading,
+        listener: (context, state) {
+          if (state.isLoading) return;
+          state.bookFailureOrSuccessOption.fold(
+            () {},
+            (a) => ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: a.fold(
+                  (_) => ColorScheme.of(context).error,
+                  (_) => null,
+                ),
+                content: Text(
+                  a.fold(
+                    (l) => l.message ?? 'Unknown error occurred',
+                    (r) => 'Booking has been placed',
+                  ),
+                ),
+              ),
             ),
-            onPressed: () => showConfirmationBookDialog(context),
-            child: const Text('Book Now'),
-          ),
-        ),
+          );
+        },
+        buildWhen: (p, c) => p.selectedSeat.isEmpty || c.selectedSeat.isEmpty,
+        builder: (context, state) => state.selectedSeat.isEmpty
+            ? const SizedBox.shrink()
+            : SizedBox(
+                width: double.infinity,
+                height: kMinInteractiveDimension,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ColorScheme.of(context).primary,
+                      foregroundColor: ColorScheme.of(context).onPrimary,
+                    ),
+                    onPressed: () =>
+                        showConfirmationBookDialog(context).then((isOk) {
+                          if (isOk == true && context.mounted) {
+                            context.read<HomeBloc>().add(const BookTicket());
+                          }
+                        }),
+                    child: const Text('Book Now'),
+                  ),
+                ),
+              ),
       ),
     );
   }
@@ -235,7 +357,7 @@ class _GridSeat extends StatelessWidget {
     required this.seatWidth,
     required this.seatHeight,
     this.disabledSeat = const {},
-    this.selectedIndex,
+    this.selectedSeat = const {},
     this.onSelected,
   }) : assert(
          colCount % 2 == 0,
@@ -250,7 +372,7 @@ class _GridSeat extends StatelessWidget {
   final double seatHeight;
 
   final Set<int> disabledSeat;
-  final int? selectedIndex;
+  final Set<int> selectedSeat;
   final ValueChanged<int>? onSelected;
 
   @override
@@ -273,9 +395,9 @@ class _GridSeat extends StatelessWidget {
                   height: seatHeight,
                   child: Material(
                     clipBehavior: Clip.hardEdge,
-                    color: disabledSeat.any((e) => e == index)
+                    color: disabledSeat.contains(index)
                         ? ColorScheme.of(context).secondary
-                        : selectedIndex == index
+                        : selectedSeat.contains(index)
                         ? ColorScheme.of(context).primary
                         : ColorScheme.of(context).surfaceContainerHighest,
                     borderRadius: const BorderRadius.all(Radius.circular(8.0)),
@@ -287,9 +409,9 @@ class _GridSeat extends StatelessWidget {
                         child: Text(
                           '${getRowLabel(rowIndex)}${leftColIndex + 1}',
                           style: TextStyle(
-                            color: disabledSeat.any((e) => e == index)
+                            color: disabledSeat.contains(index)
                                 ? ColorScheme.of(context).onSecondary
-                                : selectedIndex == index
+                                : selectedSeat.contains(index)
                                 ? ColorScheme.of(context).onPrimary
                                 : null,
                           ),
@@ -310,9 +432,9 @@ class _GridSeat extends StatelessWidget {
                   height: seatHeight,
                   child: Material(
                     clipBehavior: Clip.hardEdge,
-                    color: disabledSeat.any((e) => e == index)
+                    color: disabledSeat.contains(index)
                         ? ColorScheme.of(context).secondary
-                        : selectedIndex == index
+                        : selectedSeat.contains(index)
                         ? ColorScheme.of(context).primary
                         : ColorScheme.of(context).surfaceContainerHighest,
                     borderRadius: const BorderRadius.all(Radius.circular(8.0)),
@@ -324,9 +446,9 @@ class _GridSeat extends StatelessWidget {
                         child: Text(
                           '${getRowLabel(rowIndex)}${rightColIndex + colCount ~/ 2 + 1}',
                           style: TextStyle(
-                            color: disabledSeat.any((e) => e == index)
+                            color: disabledSeat.contains(index)
                                 ? ColorScheme.of(context).onSecondary
-                                : selectedIndex == index
+                                : selectedSeat.contains(index)
                                 ? ColorScheme.of(context).onPrimary
                                 : null,
                           ),
