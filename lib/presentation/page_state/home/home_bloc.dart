@@ -3,14 +3,33 @@ import 'package:flutter/foundation.dart' show mapEquals, setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../domain/bookings/use_cases/get_all_bookings_use_case.dart';
+import '../../../domain/bookings/use_cases/reset_all_bookings_use_case.dart';
+import '../../../domain/bookings/use_cases/save_new_bookings_use_case.dart';
 import '../../../domain/core/failures.dart';
+import '../../../domain/core/params.dart';
+import '../../../domain/theme/use_cases/get_current_theme_use_case.dart';
+import '../../../domain/theme/use_cases/toggle_theme_use_case.dart';
 import '../../routes/router.dart';
 
 part 'home_event.dart';
 part 'home_state.dart';
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  HomeBloc() : super(HomeState.initial()) {
+  final GetAllBookingsUseCase _getAllBookingsUseCase;
+  final ResetAllBookingsUseCase _resetAllBookingsUseCase;
+  final SaveNewBookingsUseCase _saveNewBookingsUseCase;
+  final GetCurrentThemeUseCase _getCurrentThemeUseCase;
+  final ToggleThemeUseCase _toggleThemeUseCase;
+
+  HomeBloc(
+    this._getAllBookingsUseCase,
+    this._resetAllBookingsUseCase,
+    this._saveNewBookingsUseCase,
+    this._getCurrentThemeUseCase,
+    this._toggleThemeUseCase,
+  ) : super(HomeState.initial()) {
+    on<ReadSavedData>(_onReadSavedData);
     on<ToggleTheme>(_onToggleTheme);
     on<SetDepartureDate>(_onSetDepartureDate);
     on<SelectClassType>(_onSelectClassType);
@@ -27,7 +46,31 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     return super.close();
   }
 
-  void _onToggleTheme(ToggleTheme event, Emitter<HomeState> emit) {
+  Future<void> _onReadSavedData(
+    ReadSavedData event,
+    Emitter<HomeState> emit,
+  ) async {
+    final themeResult = _getCurrentThemeUseCase(const NoParams());
+    emit(state.copyWith(themeMode: themeResult.fold((_) => null, id)));
+
+    final bookingsResult = await _getAllBookingsUseCase(const NoParams());
+    emit(
+      state.copyWith(
+        bookedSeat: bookingsResult.fold(
+          (_) => null,
+          (r) => r.map(
+            (k, v) =>
+                MapEntry(k, v.map((k, v) => MapEntry(ClassType.values[k], v))),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onToggleTheme(
+    ToggleTheme event,
+    Emitter<HomeState> emit,
+  ) async {
     final themeMode = switch (state.themeMode) {
       // Retrieve context from navKey
       ThemeMode.system => switch (Theme.brightnessOf(navKey.currentContext!)) {
@@ -38,6 +81,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       ThemeMode.dark => ThemeMode.light,
     };
     emit(state.copyWith(themeMode: themeMode));
+
+    // emit before save to ignore any error when saving
+    await _toggleThemeUseCase(themeMode);
   }
 
   void _onSetDepartureDate(SetDepartureDate event, Emitter<HomeState> emit) {
@@ -84,7 +130,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     );
   }
 
-  void _onBookTicket(BookTicket event, Emitter<HomeState> emit) {
+  Future<void> _onBookTicket(BookTicket event, Emitter<HomeState> emit) async {
     emit(state.copyWith(isLoading: true));
 
     if (departDateController.text.isEmpty) {
@@ -105,30 +151,46 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       ..putIfAbsent(state.classType!, () => {})
       ..[state.classType!]!.addAll(state.selectedSeat);
 
-    departDateController.clear();
+    final result = await _saveNewBookingsUseCase(
+      bookedSeat.map(
+        (k, v) => MapEntry(k, v.map((k, v) => MapEntry(k.index, v))),
+      ),
+    );
+
+    if (result.isRight()) {
+      departDateController.clear();
+      emit(
+        state.copyWith(
+          classType: () => null,
+          selectedSeat: const {},
+          bookedSeat: bookedSeat,
+          totalPrice: 0,
+        ),
+      );
+    }
 
     emit(
       state.copyWith(
-        classType: () => null,
-        selectedSeat: const {},
-        bookedSeat: bookedSeat,
-        totalPrice: 0,
         isLoading: false,
+        bookFailureOrSuccessOption: optionOf(result),
       ),
     );
   }
 
-  void _onResetForm(ResetForm event, Emitter<HomeState> emit) {
-    departDateController.clear();
-    emit(
-      state.copyWith(
-        classType: () => null,
-        selectedSeat: const {},
-        bookedSeat: const {},
-        totalPrice: 0,
-        isLoading: false,
-        bookFailureOrSuccessOption: const None(),
-      ),
-    );
+  Future<void> _onResetForm(ResetForm event, Emitter<HomeState> emit) async {
+    final result = await _resetAllBookingsUseCase(const NoParams());
+    result.fold((l) => debugPrint(l.message), (r) {
+      departDateController.clear();
+      emit(
+        state.copyWith(
+          classType: () => null,
+          selectedSeat: const {},
+          bookedSeat: const {},
+          totalPrice: 0,
+          isLoading: false,
+          bookFailureOrSuccessOption: const None(),
+        ),
+      );
+    });
   }
 }

@@ -1,15 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:hive_ce_flutter/hive_flutter.dart';
 
+import 'injector.dart';
 import 'presentation/app.dart';
+import 'storage_config.dart';
 
 void main() {
   // Better use [runZonedGuarded] if we collect crachlytics information
   runZoned(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    await Hive.initFlutter();
+    await initStorage();
+    initDependencies();
 
     runApp(const App());
   });

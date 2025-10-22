@@ -4,6 +4,10 @@ sealed class HomeEvent {
   const HomeEvent();
 }
 
+final class ReadSavedData extends HomeEvent {
+  const ReadSavedData();
+}
+
 final class ToggleTheme extends HomeEvent {
   const ToggleTheme();
 }
